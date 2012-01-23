@@ -1,6 +1,6 @@
 {application, piqi_src,
  [{description, "Piqi project source code"},
-  {vsn, "0.0.0"},
+  {vsn, "0.5.7"},
   {modules, []},
   {applications, [kernel, stdlib]},
   {env, []}]}.
