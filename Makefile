@@ -64,6 +64,8 @@ clean:: erlang-clean
 	$(MAKE) -C deps clean
 	$(MAKE) -C tests clean
 
+post_target:: erlang
+	cd piqi-rpc && make
 
 distclean:
 	$(MAKE) clean
