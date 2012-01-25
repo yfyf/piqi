@@ -91,7 +91,7 @@ let rec typename ?parent (t:T.piqtype) =
            *
            * Thus, adding "_org" suffix to the top namespace for now.
            *)
-          ".piqi_org.piqtype.any"
+          ".piqi_org.piqi.any"
 
 
 and gen_alias_typename ?parent x =
@@ -326,29 +326,30 @@ let gen_def0 ?name t =
     | `alias _ -> assert false
 
 
-let rec gen_def ?name def =
+let rec gen_def ?name ?is_func_param def =
   match def with
-    | `alias t -> gen_alias t ?name
+    | `alias t -> gen_alias t ?name ?is_func_param
     | x ->
         let res = gen_def0 x ?name
         in [res]
 
 
-and gen_alias ?name a =
+and gen_alias ?name ?(is_func_param=false) a =
   let open A in
   let name =
     match name with
       | Some _ -> name
       | None -> a.proto_name
   in
+  let is_func_param = is_func_param || a.is_func_param in
   match piqtype a.typeref with
     | #T.piqdef as def ->
         (* generate the original definition with the new name *)
         (* XXX: make such generation optional, just to be able to have less
          * Protobuf-generated code in the end *)
-        gen_def def ?name
+        gen_def def ?name ~is_func_param
     | _ -> (* alias of a pritmitive type *)
-        if a.is_func_param
+        if is_func_param
         then
           (* for primitive function parameters, generate a record that includes
            * one field of that type *)
@@ -423,7 +424,7 @@ let gen_piqi (piqi:T.piqi) =
     if C.depends_on_piq_any piqi && not !is_self_spec
     then
       iol [
-        ios "import \"piqi.org/piqtype.piqi.proto\";";
+        ios "import \"piqi.org/piqi.piqi.proto\";";
         eol;
       ]
     else iol []

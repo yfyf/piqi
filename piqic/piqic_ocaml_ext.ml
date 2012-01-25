@@ -73,12 +73,13 @@ let gen_parse ocaml_mod def =
 let gen_gen ocaml_mod def =
   let mlname = piqdef_mlname def in
   iod " " [
-    ios "let gen_" ^^ ios mlname; ios "x (format :Piqirun_ext.output_format) =";
+    ios "let gen_" ^^ ios mlname;
+        ios "?opts"; ios "x (format :Piqirun_ext.output_format) =";
       ios "let buf = "; ios ocaml_mod ^^ ios ".gen_" ^^ ios mlname; ios "x";
       ios "in";
       ios "let x_pb = Piqirun.to_string buf";
       ios "in";
-      gen_convert mlname "`pb" "format" "x_pb";
+      gen_convert mlname "`pb" "format" "x_pb"; ios "?opts";
       eol;
   ]
 
@@ -124,11 +125,8 @@ let piqic_ext piqi =
   let code = gen_code piqi in
 
   let ofile =
-    match !ofile with
-      | "" ->
-          let modname = some_of piqi.P#ocaml_module in
-          String.uncapitalize modname ^ "_ext.ml"
-      | x -> x
+    let modname = some_of piqi.P#ocaml_module in
+    String.uncapitalize modname ^ "_ext.ml"
   in
   Piqic_ocaml.gen_output_file ofile code
 
@@ -148,7 +146,7 @@ let piqic_file ifile =
 let usage = "Usage: piqic ocaml-ext [options] <.piqi file>\nOptions:"
 
 
-let speclist = Piqic_ocaml.speclist
+let speclist = Main.common_speclist @ Piqic_ocaml.common_speclist
 
 
 let run () =

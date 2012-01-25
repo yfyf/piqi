@@ -27,9 +27,11 @@ type idtable = T.piqdef Idtable.t
 (* start in boot_mode by default, it will be switched off later (see below) *)
 let boot_mode = ref true
 
-(* resolved "piqi" type definition.
- * Will be appropriately initialized during boot stage (see below) *)
-let piqi_def :T.piqtype ref = ref `bool
+(* resolved type definition for the Piqi language;
+ * it will be appropriately initialized during boot stage (see below) *)
+let piqi_lang_def :T.piqtype ref = ref `bool
+(* resolved type definition for the Piqi specification *)
+let piqi_spec_def :T.piqtype ref = ref `bool
 
 (* resolved "piqdef" type definition
  * Will be appropriately initialized during boot stage (see below) *)
@@ -48,7 +50,9 @@ let register_processing_hook (f :idtable -> T.piqi -> unit) =
   (* run the hook on the embedded Piqi self-specification *)
   f idtable T.boot_piqi; (* XXX: some_of !boot_piqi *)
   debug "register_processing_hook(1.5)\n";
-  f idtable T.piqi;
+  f idtable T.piqi_lang;
+  debug "register_processing_hook(1.6)\n";
+  f idtable T.piqi_spec;
   debug "register_processing_hook(1)\n";
   (* add the hook to the list of registered hooks *)
   processing_hooks := !processing_hooks @ [f]
@@ -351,41 +355,55 @@ let debug_loc prefix =
 let assert_loc () =
   if (!Piqloc.ocount <> !Piqloc.icount)
   then
-    piqi_error
+    failwith
      (Printf.sprintf "internal_error: out count = %d, in count = %d\n" !Piqloc.ocount !Piqloc.icount)
 
 
+(* convert textobj, i.e. JSON or XML to piqobj -- this function will be set by
+ * either Piqi_json or Piqi_xml, depending on which format we are dealing with
+ * at the moment *)
+let piqobj_of_ref_init (piqtype: T.piqtype) (text: int) :Piqobj.obj =
+  assert false
+
+let piqobj_of_ref = ref piqobj_of_ref_init
+
+
+let resolve_default_value default piqtype piqobj =
+    assert_loc ();
+    debug_loc "resolve_default_value(0)";
+    let binobj = Piqobj_to_wire.gen_binobj piqobj in
+
+    (* NOTE: fixing (preserving) location counters which get skewed during
+     * parsing defaults *)
+    Piqloc.icount := !Piqloc.ocount;
+    debug_loc "resolve_default_value(1)";
+
+    default.T.Any.binobj <- Some binobj;
+    default.T.Any.typename <- Some (C.full_piqi_typename piqtype);
+    ()
+
+
 let resolve_field_default x =
+  (* debug "resolve_field_default: %s\n" (C.name_of_field x); *)
   let open F in
   match x.default, x.typeref with
     | None, _ -> () (* no default *)
-    | Some {T.Any.binobj = Some _ }, _ ->
+    | Some {T.Any.binobj = Some _}, _ ->
         (* nothing to do -- object is already resolved *)
         ()
-    | Some ({T.Any.ast = Some ast } as default), Some typeref ->
+    | Some ({T.Any.ast = Some ast} as default), Some typeref ->
         let piqtype = C.piqtype typeref in
         let piqobj = Piqobj_of_piq.parse_obj piqtype ast in
+        resolve_default_value default piqtype piqobj
 
-        debug_loc "resolve_field_default(0)";
+    | Some ({T.Any.ref = Some ref} as default), Some typeref ->
+        let piqtype = C.piqtype typeref in
+        let piqobj = !piqobj_of_ref piqtype ref in
+        resolve_default_value default piqtype piqobj
 
-        (* NOTE: fixing (preserving) location counters which get skewed during
-         * parsing defaults *)
-        let ocount = !Piqloc.ocount in
-
-        (* XXX: pack default to contain only binary representation of
-         * the value, i.e. don't include object typename *)
-        let binobj = Piqobj_to_wire.gen_binobj piqobj in
-
-        (* XXX: or just rather do Piqloc.ocount := !Piqloc.icount? *)
-        Piqloc.icount := !Piqloc.icount + (!Piqloc.ocount - ocount);
-
-        debug_loc "resolve_field_default(1)";
-        assert_loc ();
-
-        default.T.Any.binobj <- Some binobj
     | _, None -> () (* there is no default for a flag *)
     | _ ->
-        assert false (* either binobj or ast have to be defined *)
+        assert false (* either binobj or ast or textobj must be defined *)
 
 
 let resolve_defaults = function
@@ -456,9 +474,6 @@ let resolve_defs ?piqi idtable (defs:T.piqdef list) =
   (* assign wire codes, if they are unassigned; check otherwise; check
    * correctness of .wire-packed usage *)
   Piqi_wire.process_defs defs;
-
-  (* resolve defaults ANY to OBJ using field types and codes *)
-  List.iter resolve_defaults defs;
 
   (* set up parent namespace to local piqi defs *)
   (match piqi with
@@ -566,6 +581,7 @@ let assign_import_name x =
 
 let mlobj_to_piqobj piqtype wire_generator mlobj =
   debug_loc "mlobj_to_piqobj(0)";
+  assert_loc ();
   let binobj = Piqirun.gen_binobj wire_generator mlobj in
   debug_loc "mlobj_to_piqobj(1.5)";
 
@@ -585,6 +601,7 @@ let mlobj_to_ast piqtype wire_generator mlobj =
   debug_loc "mlobj_to_ast(1.5)";
   let ast = Piqobj_to_piq.gen_obj piqobj in
   debug_loc "mlobj_to_ast(1)";
+  assert_loc ();
   ast
 
 
@@ -629,7 +646,7 @@ let parse_piqi ast =
   (* XXX: handle errors *)
   debug "parse_piqi(0)\n";
   (* use prepared static "piqi" definition to parse the ast *)
-  let res = mlobj_of_ast !piqi_def T.parse_piqi ast in
+  let res = mlobj_of_ast !piqi_lang_def T.parse_piqi ast in
   debug "parse_piqi(1)\n";
   res
 
@@ -848,6 +865,11 @@ let get_imported_defs imports =
   flatmap aux imports
 
 
+let get_function_defs_init piqi = []
+
+let get_function_defs = ref get_function_defs_init
+
+
 (* do include & extension expansion for the loaded piqi using extensions from
  * all included piqi modules *)
 let rec process_piqi ?modname ?(cache=true) ?(fname="") (piqi: T.piqi) =
@@ -929,22 +951,45 @@ let rec process_piqi ?modname ?(cache=true) ?(fname="") (piqi: T.piqi) =
           let custom_fields = custom_fields @ (get_custom_fields modules) in
           expand_extensions defs extensions custom_fields
   in
-  (* preserve the original defintions *)
+  (* preserve the original defintions by making a copy *)
   let resolved_defs = copy_defs extended_defs in
 
-  (* if the module includes (or is itself) piqi.org/piqtype, use hash-based
-   * field and option codes instead of auto-enumerated ones *)
+  (* if the module includes (or is itself) piqi.org/piqi, use hash-based field
+   * and option codes instead of auto-enumerated ones
+   *
+   * NOTE: code assignment is needed only for .piqi, Piqi specifications encoded
+   * in other formats must already include explicitly speficied (and correct!)
+   * wire codes.
+   *
+   * NOTE: this step must be performed before resolving defaults -- this is
+   * critical for potential piqi extensions such as those used in various piqic
+   *)
   if C.is_self_spec piqi then Piqi_wire.add_hashcodes resolved_defs;
 
   (* check defs, resolve defintion names to types, assign codes, resolve default
    * fields *)
   let idtable = resolve_defs ~piqi idtable resolved_defs in
 
+  (* get definitions derived from function parameters *)
+  let func_defs = !get_function_defs piqi in
+
+  (* resolving them separately, because they should not be addressable from the
+   * normal definitions and from other function definitions as well *)
+  List.iter (fun x -> ignore (resolve_defs ~piqi idtable [x])) func_defs;
+
+  (* now, combine the two together *)
+  let resolved_defs = resolved_defs @ func_defs in
+
   piqi.P#extended_piqdef <- extended_defs;
   piqi.P#resolved_piqdef <- resolved_defs;
 
   (* run registered processing hooks *)
   List.iter (fun f -> f idtable piqi) !processing_hooks;
+
+  (* resolve defaults ANY to OBJ using field types and codes; we need to do it
+   * after executing hooks, because otherwise json names will be unresolved and
+   * default field resolution will fail *)
+  List.iter resolve_defaults resolved_defs;
   ()
  
 
@@ -1036,7 +1081,7 @@ and load_include x =
 
 
 (* XXX: is it correct in case of piqicc and piqic? *)
-let embedded_modname = "embedded/piqi.org/piqi"
+let embedded_modname = "embedded/piqi.org/piqi-lang"
 
 
 let find_embedded_piqtype name =
@@ -1052,17 +1097,25 @@ let boot () =
   (* don't cache them as we are adding the spec to the DB explicitly below *)
   process_piqi T.boot_piqi ~cache:false;
   boot_piqi := Some T.boot_piqi;
-  process_piqi T.piqi ~cache:false;
+  process_piqi T.piqi_lang ~cache:false;
+  process_piqi T.piqi_spec ~cache:false;
 
-  (* add the spec to the DB under special name *)
-  T.boot_piqi.P#modname <- Some "embedded/piqi-boot";
+  (* add the boot spec to the DB under a special name *)
+  T.boot_piqi.P#modname <- Some "embedded/piqi.org/piqi-boot";
   Piqi_db.add_piqi T.boot_piqi;
 
-  T.piqi.P#modname <- Some embedded_modname;
-  Piqi_db.add_piqi T.piqi;
+  (* add the self-spec to the DB under a special name *)
+  T.piqi_spec.P#modname <- Some "embedded/piqi.org/piqi";
+  Piqi_db.add_piqi T.piqi_spec;
 
-  (* resolved "piqi" type definition *)
-  piqi_def := find_embedded_piqtype "piqi";
+  (* add the self-spec to the DB under a special name *)
+  T.piqi_lang.P#modname <- Some embedded_modname;
+  Piqi_db.add_piqi T.piqi_lang;
+
+  (* resolved type definition for the Piqi language *)
+  piqi_lang_def := find_embedded_piqtype "piqi";
+  (* resolved type definition for the Piqi specification *)
+  piqi_spec_def := Piqi_db.find_piqtype "embedded/piqi.org/piqi/piqi";
   (* resolved "piqdef" type definition *)
   piqdef_def := find_embedded_piqtype "piqdef";
 
@@ -1168,7 +1221,7 @@ let load_piqi fname :T.piqi =
   trace "loading piqi file: %s\n" fname;
   trace_enter ();
   let ast = read_piqi fname in
-  let piqi = load_piqi_ast fname ast ~cache:false in
+  let piqi = load_piqi_ast fname ast ~cache:true in
   trace_leave ();
   piqi
 
