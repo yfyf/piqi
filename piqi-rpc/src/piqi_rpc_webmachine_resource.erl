@@ -139,7 +139,7 @@ known_content_type(ReqData, Context) ->
     % NOTE: Webmachine returns <<>> as a body even if "Content-Length" header is
     % not present.
     Body = wrq:req_body(ReqData),
-    ContentType = wrq:get_req_header("content-type", ReqData),
+    ContentType = get_clean_content_type(ReqData),
 
     IsKnownType =
         case ContentType of
@@ -200,7 +200,7 @@ content_types_provided(ReqData, Context) ->
 
 % process POST requests
 process_post(ReqData, Context) ->
-    ContentType = wrq:get_req_header("content-type", ReqData),
+    ContentType = get_clean_content_type(ReqData),
     InputFormat = content_type_to_format(ContentType),
     rpc(ReqData, Context, InputFormat).
 
@@ -220,6 +220,16 @@ content_type_to_format("application/json") -> 'json';
 content_type_to_format("application/xml") -> 'xml';
 content_type_to_format("text/plain") -> 'piq';
 content_type_to_format(_) -> 'undefined'.
+
+
+get_clean_content_type(ReqData) ->
+	ContentType = wrq:get_req_header("content-type", ReqData),
+	case ContentType of
+        "application/json"++_ -> "application/json";
+        "application/xml"++_ -> "application/xml";
+        "application/x-protobuf"++_ -> "application/x-protobuf";
+    	_ -> ""
+    end.
 
 
 set_data_response(Data, OutputFormat, ReqData) ->
