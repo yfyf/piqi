@@ -159,21 +159,25 @@ type options =
   {
     mutable json_omit_null_fields : bool;
     mutable pretty_print : bool;
+    mutable use_strict_parsing : bool;
   }
 
 
 let make_options
         ?(pretty_print=true)
         ?(json_omit_null_fields=true)
+        ?(use_strict_parsing=false)
         () =
   {
     json_omit_null_fields = json_omit_null_fields;
     pretty_print = pretty_print;
+    use_strict_parsing = use_strict_parsing;
   }
 
 
 let set_options opts =
   Piqobj_to_json.omit_null_fields := opts.json_omit_null_fields;
+  Piqi_config.flag_strict := opts.use_strict_parsing;
   ()
 
 
@@ -190,5 +194,8 @@ let convert_piqtype ~opts piqtype input_format output_format data =
       (fun () -> parse_obj piqtype input_format data)
       ()
   in
+  (* reset location db to allow GC to collect previously read objects *)
+  Piqloc.reset ();
+
   gen_obj output_format piqobj ~pretty_print:opts.pretty_print
 

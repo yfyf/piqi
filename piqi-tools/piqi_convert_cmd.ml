@@ -55,6 +55,7 @@ let arg__json_omit_null_fields =
 
 let speclist = Main.common_speclist @
   [
+    Piqi_main.arg__strict;
     arg_o;
 
     "-f", Arg.Set_string input_encoding,
@@ -292,7 +293,9 @@ let convert_file () =
   Piqi_convert.init ();
   Piqi_convert.set_options
     (Piqi_convert.make_options
-      ~json_omit_null_fields:!flag_json_omit_null_fields ()
+      ~json_omit_null_fields:!flag_json_omit_null_fields
+      ~use_strict_parsing:!Piqi_config.flag_strict
+      ()
     );
   let input_encoding =
     if !input_encoding <> ""
@@ -329,20 +332,10 @@ let convert_file () =
     while true
     do
       let obj = reader () in
-      if !flag_embed_piqi
-      then (
-        trace "piqi convert: embedding Piqi\n";
-        (* write yet unwirtten object's dependencies *)
-        let deps = get_dependencies obj ~only_imports:(not is_piq_output) in
-        List.iter (fun x -> writer och (Piq.Piqi x)) deps
-      );
-      (* write the object itself *)
-      writer och obj;
 
-      (* NOTE: this is applicable only when reading from Piq or Piq-json formats
-       *)
-      match obj with
-        | Piq.Piqi _ ->
+      (match obj with
+        | Piq.Piqi piqi ->
+            Piqi_db.add_piqi piqi;
             (* Preserve location information so that exising location info for
              * Piqi modules won't be discarded by subsequent Piqloc.reset()
              * calls. *)
@@ -351,6 +344,18 @@ let convert_file () =
             (* reset location db to allow GC to collect previously read objects
              *)
             Piqloc.reset ()
+      );
+
+      if !flag_embed_piqi
+      then (
+        trace "piqi convert: embedding Piqi\n";
+        (* write yet unwirtten object's dependencies *)
+        let deps = get_dependencies obj ~only_imports:(not is_piq_output) in
+        List.iter (fun x -> writer och (Piq.Piqi x)) deps
+      );
+
+      (* write the output object *)
+      writer och obj
     done
   with
     Piq.EOF -> ()
