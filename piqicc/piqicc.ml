@@ -66,12 +66,12 @@ let embed_boot_modules ch boot_fname =
   in
   Iolist.to_channel ch code;
 
-  let boot_piqi = some_of !C.boot_piqi in
+  let piqi_boot = some_of !C.piqi_boot in
   (* the list of all included modules including the current one *)
-  let modules = boot_piqi.P#included_piqi in
+  let modules = piqi_boot.P#included_piqi in
   (* Embed in a way that the root module will be at the end of the list and all
    * dependencies are added before *)
-  embed_module ch boot_piqi ~fname:boot_fname;
+  embed_module ch piqi_boot ~fname:boot_fname;
   List.iter (embed_module ch) (List.tl (List.rev modules))
 
 
@@ -86,16 +86,18 @@ let add_hashcodes defs =
 
 
 (* piq interface compiler compile *)
-let piqicc ch boot_fname piqi_fname piqi_impl_fname =
+let piqicc ch boot_fname lang_fname impl_fname =
   trace "piqicc(0)\n";
+
   (* reload the boot module from file if it was specified using --boot option *)
+  trace "piqicc: loading piqi-boot spec from: %s\n" boot_fname;
   Piqi.load_boot_piqi boot_fname;
 
-  trace "piqicc: loading piqi spec from: %s\n" piqi_fname;
-  let piqi = Piqi.load_piqi piqi_fname in
+  trace "piqicc: loading piqi-lang spec from: %s\n" lang_fname;
+  let piqi = Piqi.load_piqi lang_fname in
 
-  trace "piqicc: loading piqi-impl spec from: %s\n" piqi_impl_fname;
-  let piqi_impl = Piqi.load_piqi piqi_impl_fname in
+  trace "piqicc: loading piqi-impl spec from: %s\n" impl_fname;
+  let piqi_impl = Piqi.load_piqi impl_fname in
 
   trace "piqicc: piqi compiling compiler\n";
   (* TODO: check & report piqi incompatibility *)
@@ -113,73 +115,64 @@ let piqicc ch boot_fname piqi_fname piqi_impl_fname =
     with Not_found ->
       piqi_error "missing imported module piqi.org/piqi"
   in
-  let boot_piqi = some_of !C.boot_piqi in
+  let piqi_boot = some_of !C.piqi_boot in
 
   (* prepare embedded Piqi language spec *)
   let piqi_lang = P#{
-    (some_of piqi.original_piqi) with
+    (Piqi.expand_piqi piqi) with
       modname = piqi.P#modname;
       ocaml_module = None; (* XXX *)
-
-      (* unresolved, but expanded piqdef list *)
-      piqdef = piqi.P#extended_piqdef;
-      includ = [];
-      import = [];
-      extend = [];
-
-      (* NOTE: leaving the original custom_fields *)
-      (*
-      custom_field = [];
-
-      extended_piqdef = [];
-      resolved_piqdef = [];
-      imported_piqdef = [];
-      resolved_import = [];
-      included_piqi = [];
-      original_piqi = None;
-      *)
   }
   in
   (* prepare embedded Piqi self-specification *)
   let piqi_spec = P#{
-    (some_of piqi_spec.original_piqi) with
+    (Piqi.expand_piqi piqi_spec) with
       modname = piqi_spec.P#modname;
-      ocaml_module = None;
-
-      (* unresolved, but expanded piqdef list *)
-      piqdef = piqi_spec.P#extended_piqdef;
-      includ = [];
-      import = [];
-      extend = [];
-
-      custom_field = [];
+      ocaml_module = None; (* XXX *)
+      custom_field = []; (* XXX *)
   }
   in
   (* prepare embedded Piqi boot spec *)
-  let boot_piqi = P#{
-    (some_of boot_piqi.original_piqi) with
-      modname = boot_piqi.P#modname;
+  let piqi_boot = P#{
+    (Piqi.expand_piqi piqi_boot) with
+      modname = piqi_boot.P#modname;
       ocaml_module = None; (* XXX *)
-
-      (* unresolved, but expanded piqdef list *)
-      piqdef = boot_piqi.P#extended_piqdef;
-      includ = [];
-      import = [];
-      extend = [];
-
-      (* NOTE: leaving the original custom_fields *)
-      (*
-      custom_field = [];
-      *)
   }
   in
+
+  (* convert piqi to binobj using piqi self-definition that we've just loaded *)
+  let piqi_def = Piqi_db.find_local_piqdef piqi "piqi" in
+  let piqi_type = (piqi_def: T.piqdef :> T.piqtype) in
   let gen_piqi_binobj piqi =
     add_hashcodes piqi.P#piqdef;
-    Piqirun.gen_binobj T.gen__piqi piqi
+    (* Old method that does not account for possible Piqi lang
+     * self-specification refactoring
+     *
+     Piqirun.gen_binobj T.gen__piqi piqi
+     *)
+    Piqloc.pause ();
+    let piqi_ast = Piqi_pp.piqi_to_ast piqi ~simplify:true in
+
+    (* XXX: setting this option in order to delay, and then ignore all parsing
+     * warnings *)
+    Piqobj_of_piq.delay_unknown_warnings := true;
+
+    let piqobj = Piqobj_of_piq.parse_obj piqi_type piqi_ast in
+
+    let unknown_fields = Piqobj_of_piq.get_unknown_fields () in
+    Piqi.check_unknown_fields unknown_fields ["ocaml-name"; "ocaml-type"];
+
+    let res = Piqobj_to_wire.gen_binobj piqobj in
+    Piqloc.resume ();
+    res
   in
+
+  trace "gen_piqi_binobj piqi_lang\n";
   let piqi_binobj = gen_piqi_binobj piqi_lang in
+  trace "gen_piqi_binobj piqi_spec\n";
   let piqi_spec_binobj = gen_piqi_binobj piqi_spec in
-  let piqi_boot_binobj = gen_piqi_binobj boot_piqi in
+  trace "gen_piqi_binobj piqi_boot\n";
+  let piqi_boot_binobj = gen_piqi_binobj piqi_boot in
 
   let code = iod " " [
     ios "let parse_piqi_binobj x = ";
@@ -196,7 +189,7 @@ let piqicc ch boot_fname piqi_fname piqi_impl_fname =
       ios "in parse_piqi_binobj piqi_spec_binobj";
     eol;
 
-    ios "let boot_piqi = ";
+    ios "let piqi_boot = ";
       ios "let piqi_boot_binobj = "; ioq (String.escaped piqi_boot_binobj);
       ios "in parse_piqi_binobj piqi_boot_binobj";
     eol;
@@ -210,7 +203,7 @@ let piqicc ch boot_fname piqi_fname piqi_impl_fname =
   (* Override supplied module name *)
   let piqi_impl = P#{piqi_impl with ocaml_module = Some "Piqtype"} in
   let code = iol [
-    Piqic_ocaml_base.piqic piqi_impl;
+    Piqic_ocaml.gen_ocaml_code piqi_impl;
     code;
   ]
   in
@@ -224,8 +217,8 @@ open Main
 
 
 (* command-line options *)
-let boot_file = ref ""
-let piqi_file = ref ""
+let piqi_boot_file = ref ""
+let piqi_lang_file = ref ""
 let piqi_impl_file = ref ""
 
 
@@ -236,9 +229,9 @@ let speclist = Main.common_speclist @
   [
     arg_o;
     (* XXX: arg_C; *)
-    "--boot", Arg.Set_string boot_file,
+    "--boot", Arg.Set_string piqi_boot_file,
       "<.piqi file> specify a Piqi boot module";
-    "--piqi", Arg.Set_string piqi_file,
+    "--lang", Arg.Set_string piqi_lang_file,
       "<.piqi file> specify the Piqi language spec";
     "--impl", Arg.Set_string piqi_impl_file,
       "<.piqi file> specify spec for internal representation";
@@ -251,12 +244,12 @@ let piqicc_file () =
     Arg.usage speclist usage;
     die ""
   in
-  if !piqi_file = "" then error "'--piqi' parameter is missing";
+  if !piqi_lang_file = "" then error "'--lang' parameter is missing";
   if !piqi_impl_file = "" then error "'--impl' parameter is missing";
-  if !boot_file = "" then error "'--boot' parameter is missing";
+  if !piqi_boot_file = "" then error "'--boot' parameter is missing";
 
   let ch = Main.open_output !ofile in
-  piqicc ch !boot_file !piqi_file !piqi_impl_file
+  piqicc ch !piqi_boot_file !piqi_lang_file !piqi_impl_file
 
 
 let run () =

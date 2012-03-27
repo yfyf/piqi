@@ -6,16 +6,16 @@
 % Copyright 2009, 2010, 2011 Anton Lavrik
 
 
-.module piqi.org/piqi-json
+.module piqi.org/piqi.json
 
 
-.include [ .module piqi.org/piqi-base ]
+.include [ .module piqi.org/piqi ]
 
 
 .extend [
-    (.name record field variant option alias list)
+    (.typedef record field variant option alias list)
 
-    .field [
+    .with.field [
         .name json-name
         .type string
         .optional

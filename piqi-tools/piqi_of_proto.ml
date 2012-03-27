@@ -95,7 +95,8 @@ module Idtable =
             | Some x -> x
             | None ->
                 (* basename + chop all extensions + underscores to dashes *)
-                let basename = Piqi_file.basename file in
+                let basename = Filename.basename file in
+                let basename = Piqi_file.chop_all_extensions basename in
                 Piqi_name.make_local_name basename
         in
         import_name ^ "/" ^ piqi_name
@@ -399,8 +400,8 @@ let gen_extension idtable ?path x =
   let type_name = gen_type idtable (some_of x.extendee) in
   iod "\n" [
     ios ".extend [";
-      ios ".name " ^^ ios type_name;
-      gen_field idtable ?path x;
+      ios ".typedef " ^^ ios type_name;
+      ios ".with" ^^ gen_field idtable ?path x;
     ios "]";
   ]
 

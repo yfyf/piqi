@@ -22,9 +22,6 @@ module C = Piqi_common
 open C
 
 
-let _ = Piqilib.init ()
-
-
 exception EOF
 
 (* piq stream object *)
@@ -84,9 +81,10 @@ let get_current_piqtype user_piqtype locref =
 
 
 let piqi_of_piq fname ast =
+  (* XXX: validate that the input corresponds to piqi-spec and not to a wider
+   * piqi-lang? *)
   let piqi = Piqi.parse_piqi ast in
-  Piqi.process_piqi piqi ~fname ~cache:false;
-  piqi
+  Piqi.process_piqi piqi ~fname ~cache:false
 
 
 let load_piq_obj (user_piqtype: T.piqtype option) piq_parser :obj =
@@ -247,21 +245,21 @@ let reset_defaults defs =
   List.iter reset_record_defaults defs
 
 
-let expand_piqi piqi =
-  let expanded_piqi = Piqi_ext.expand_piqi piqi in
+let lang_to_spec piqi =
+  let piqi_spec = Piqi.lang_to_spec piqi in
 
   (* make sure we include all automatically assigned hash-based wire code for
    * fiels and options *)
   if C.is_self_spec piqi
-  then Piqi_wire.add_hashcodes expanded_piqi.P#piqdef;
+  then Piqi_wire.add_hashcodes piqi_spec.P#piqdef;
 
   (* make sure that the module's name is set *)
-  P#{expanded_piqi with modname = piqi.P#modname}
+  P#{piqi_spec with modname = piqi.P#modname}
 
 
 let piqi_to_piqobj piqi =
   Piqloc.pause ();
-  let piqi = expand_piqi piqi in
+  let piqi = lang_to_spec piqi in
 
   let piqtype = !Piqi.piqi_spec_def in
   let wire_generator = T.gen__piqi in
@@ -319,7 +317,7 @@ let piqi_of_wire bin =
    * self-specificaion rather that the language-impl *)
   let piqi = T.parse_piqi bin in
 
-  Piqi.process_piqi piqi ~cache:false;
+  let piqi = Piqi.process_piqi piqi ~cache:false in
   Piqloc.resume ();
   piqi
 
@@ -477,7 +475,7 @@ let piqi_of_json json =
   (* set the default field resolver to json *)
   Piqi.piqobj_of_ref := piqobj_of_json_ref;
 
-  Piqi.process_piqi piqi ~cache:false;
+  let piqi = Piqi.process_piqi piqi ~cache:false in
   piqi
 
 
@@ -630,7 +628,7 @@ let piqi_of_xml xml =
   (* set the default field resolver to xml *)
   Piqi.piqobj_of_ref := piqobj_of_xml_ref;
 
-  Piqi.process_piqi piqi ~cache:false;
+  let piqi = Piqi.process_piqi piqi ~cache:false in
   piqi
 
 

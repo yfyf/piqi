@@ -35,13 +35,15 @@ let speclist = Main.common_speclist @
 
    "--includes-only", Arg.Set flag_includes_only,
      "expand only includes (don't expand extensions)";
+
+    Piqi_main.arg__include_extension;
   ]
 
 
 let expand_file filename =
   let ch = Main.open_output !ofile in
   let piqi = Piqi.load_piqi filename in
-  let res_piqi = Piqi_ext.expand_piqi piqi ~includes_only:!flag_includes_only in
+  let res_piqi = Piqi.expand_piqi piqi ~includes_only:!flag_includes_only in
   Piqi_pp.prettyprint_piqi ch res_piqi
 
 

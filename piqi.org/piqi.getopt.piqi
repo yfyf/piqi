@@ -7,23 +7,23 @@
 % Copyright 2009, 2010, 2011 Anton Lavrik
 
 
-.module piqi.org/piqi-getopt
+.module piqi.org/piqi.getopt
 
 
-.include [ .module piqi.org/piqi-base ]
+.include [ .module piqi.org/piqi ]
 
 
 % a single-letter getopt option or flag
 .extend [
-    (.name field option)
+    (.typedef field option)
 
-    .field [
+    .with.field [
         .name getopt-letter
         .type word
         .optional
     ]
 
-    .field [
+    .with.field [
         .name getopt-doc
         .type string
         .optional

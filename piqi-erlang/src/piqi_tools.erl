@@ -102,7 +102,8 @@ start_link() ->
 
 %% @private
 init([]) ->
-    Command = piqi:get_command("piqi") ++ " server" ++ ?PIQI_FLAGS,
+    Piqi = piqi:get_command("piqi"),
+    Command = Piqi ++ " server" ++ ?PIQI_FLAGS,
     %Command = "tee ilog | piqi server --trace | tee olog",
 
 	case filelib:is_file( piqi:get_command("piqi")) of

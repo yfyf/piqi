@@ -1,5 +1,5 @@
 include $(PIQI_ROOT)/make/Makefile.ocaml
-include $(PIQI_ROOT)/piqilib/Makefile.piqi_extended
+include $(PIQI_ROOT)/piqilib/Makefile.piqi_common
 
 
 RESULT = piqilib
@@ -7,7 +7,7 @@ PIQI_LIB_NAME = lib
 LIBINSTALL_FILES = \
 	$(RESULT).cmxa \
 	$(RESULT).$(EXT_LIB) $(RES_CLIB) \
-	$(shell ls *.cmi) \
+	$(shell ls *.cmi 2>/dev/null) \
 	piqirun_ext.mli
 
 # we're not building byte-code library by default, only when requested
@@ -73,7 +73,7 @@ post_target:: install
 piqi_piqi.ml: $(PIQI_PIQI)
 	# Note, using standard piqi.org/piqi-boot as boot module for piqicc
 	$(PIQICC) $(PIQICC_FLAGS) -o $@.tmp.ml \
-		--boot piqi-boot.piqi --piqi piqi-lang.piqi --impl piqi-impl.piqi
+		--boot piqi-boot.piqi --lang piqi-lang.piqi --impl piqi-impl.piqi
 	$(CAMLP4_O) -o $@ $@.tmp.ml
 
 
