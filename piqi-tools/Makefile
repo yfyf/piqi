@@ -67,7 +67,7 @@ $(PIQI_ML_SOURCES): $(PIQI_MODULES)
 # rule for re-creating descriptor.proto.piqi from a (newer) descriptor.proto
 
 descriptor.proto.piqi: descriptor.proto
-	./piqi of-proto --normalize $<
+	piqi of-proto --normalize $<
 
 
 clean::
