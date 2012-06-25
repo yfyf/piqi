@@ -14,8 +14,7 @@
    limitations under the License.
 *)
 
-
-open Piqi_common
+module U = Piqi_util
 
 
 let has_parent name =
@@ -48,7 +47,7 @@ let split_name x =
 
 let make_local_name modname =
   let name = get_local_name modname in
-  underscores_to_dashes name
+  U.underscores_to_dashes name
 
 
 let is_valid_char allow = function
@@ -141,5 +140,5 @@ let is_normal_name s =
 let normalize_name s =
   if is_normal_name s
   then s
-  else string_of_list (normalize_list (list_of_string s))
+  else U.string_of_list (normalize_list (U.list_of_string s))
 
