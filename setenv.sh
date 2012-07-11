@@ -12,7 +12,9 @@ export PIQI_OCAML_PREFIX=
 # don't change the settings below -- they are necessary for the build process
 #
 
-export PIQI_ROOT="`pwd`"
+PWD="`pwd`"
+
+export PIQI_ROOT="`readlink -f ${PWD}`"
 
 # directory for temporary files required for the build
 export PIQI_BUILD="$PIQI_ROOT/build"
