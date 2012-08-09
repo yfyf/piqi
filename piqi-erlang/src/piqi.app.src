@@ -6,7 +6,7 @@
         piqi, piqi_app, piqi_sup,
         piqi_tools,
         piqi_piqi, piqi_rpc_piqi, piqi_tools_piqi,
-        piqic_erlang_ext,
+        piqic_erlang_ext, piqirun_props,
         piqirun_tests
         ]},
   {registered, [piqi_tools, piqi_sup]},
