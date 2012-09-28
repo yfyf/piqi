@@ -149,13 +149,55 @@ let erlname_of_option o =
   let open O in erlname_of o.erlang_name o.typeref
 
 
+(* FIXME: this was copy-pasted from piqic_erlang_in *)
+let gen_erlang_binary x =
+  let codes =
+    List.map (fun x ->
+      ios (string_of_int (Char.code x))) (list_of_string x)
+  in
+  iol [ ios "<<"; iod "," codes; ios ">>" ]
+
+
+let gen_parse_piqtype = function
+  | (#T.piqdef as x) ->
+      let modname =
+        if Piqic_common.is_boot_def x
+        then !top_modname
+        else
+          let piqi = get_parent_piqi x in
+          some_of piqi.P#erlang_module
+      in
+      iol [
+        ios modname; ios ":parse_"; ios (piqdef_erlname x)
+      ]
+  | _ ->
+      assert false
+
+
+let gen_field_default f =
+  let open Field in
+  match f.mode with
+    | `repeated -> ios " = []" (* initialize repreated fields as [] *)
+    | `optional when f.typeref = None -> ios " = false" (* flag *)
+    | `optional when f.default <> None ->
+        (match f.default with
+          | Some {T.Any.binobj = Some x} ->
+              let default_expr = gen_erlang_binary x in
+              iol [
+                ios " = "; gen_parse_piqtype (some_of f.typeref);
+                  ios "("; default_expr; ios ")";
+              ]
+          | _ -> ios ""
+        )
+    | _ -> ios ""
+
+
 let gen_field f = 
   let open F in
   let fdef = iol (* field definition *)
     [
       ios (erlname_of_field f);
-      (* initialize repreated fields as [] *)
-      (if f.mode = `repeated then ios " = []" else ios "");
+      gen_field_default f;
       ios " :: ";
       gen_field_type f.mode f.typeref;
     ]
