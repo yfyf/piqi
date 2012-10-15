@@ -159,11 +159,14 @@ let gen_field f =
 
 let gen_record r =
   let name = some_of r.R#erlang_name in
+  let unknown_fields =
+    ios "piqi_protobuf_unknown_field_list = [] :: [piqirun_parsed_field()]"
+  in
   let rdef = iol
     [
       ios "-record("; ios (scoped_name name); ios ", ";
       ios "{"; indent;
-      iod ",\n    " (List.map gen_field r.R#field);
+      iod ",\n    " ((List.map gen_field r.R#field) @ [unknown_fields]);
       unindent; eol;
       ios "}).";
       eol;

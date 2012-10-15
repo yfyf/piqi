@@ -201,6 +201,8 @@ let gen_hrl modname piqi =
     ios "-ifndef("; ios def; ios ")."; eol;
     ios "-define("; ios def; ios ", 1)."; eol;
     eol;
+    ios "-include_lib(\"piqi/include/piqirun.hrl\")."; eol;
+    eol;
     types;
     eol;
     ios "-endif."; eol;

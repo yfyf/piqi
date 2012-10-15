@@ -127,17 +127,20 @@ let gen_record r =
   let fgens = (* field generators list *)
     List.map (gen_field rname) fields
   in
-  let arg_variable = (* prevent Erlang warning on unused variable *)
-    if fields <> []
-    then ios "X"
-    else iol [ ios "#"; ios rname; ios "{}" ]
-  in (* gen_<record-name> function delcaration *)
+  let unknown_fields =
+    iol [
+      ios "piqirun:gen_parsed_field(F) || F <- X#"; ios rname; ios ".piqi_protobuf_unknown_field_list"
+    ]
+  in
+ (* gen_<record-name> function delcaration *)
   iol
     [
-      ios "gen_"; ios (some_of r.R#erlang_name);
-        ios "(Code, "; arg_variable; ios ") ->"; indent;
+      ios "gen_"; ios (some_of r.R#erlang_name); ios "(Code, X) ->"; indent;
         ios "piqirun:gen_record(Code, ["; indent;
           iod ",\n        " fgens;
+          if fields <> []
+          then iol [ ios "\n        | ["; unknown_fields; ios "]" ]
+          else unknown_fields;
           unindent; eol;
         ios "]).";
         unindent; eol;

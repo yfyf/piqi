@@ -161,13 +161,16 @@ let gen_record r =
       | [] -> iol []
       | _ -> iol [ iod ",\n    " fparserl; ios ","; eol; ]
   in
+  let unknown_fields =
+      iol [ ios "piqi_protobuf_unknown_field_list = "; rest i; ]
+  in
   iol [
     ios "parse_"; ios name; ios "(X) -> "; indent;
       ios "R0 = piqirun:parse_record(X),"; eol;
       parsers_code;
-      ios "piqirun:check_unparsed_fields("; rest i; ios "),"; eol;
+      ios "piqirun:check_unknown_fields("; rest i; ios "),"; eol;
       ios "#"; ios (scoped_name name); ios "{"; indent;
-      iod ",\n        " fconsl;
+      iod ",\n        " (fconsl @ [unknown_fields]);
       unindent; eol;
       ios "}.";
       unindent; eol;
