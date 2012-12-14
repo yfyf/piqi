@@ -3,4 +3,5 @@
   {vsn, "0.5.7"},
   {modules, []},
   {applications, [kernel, stdlib]},
+  {registered, []},
   {env, []}]}.
