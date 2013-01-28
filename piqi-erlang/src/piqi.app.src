@@ -1,14 +1,7 @@
 {application, piqi,
  [{description, "Piqi Library"},
   {vsn, git},
-  {modules, [
-        piqirun, piqirun_ext,
-        piqi, piqi_app, piqi_sup,
-        piqi_tools,
-        piqi_piqi, piqi_rpc_piqi, piqi_tools_piqi,
-        piqic_erlang_ext, piqirun_props,
-        piqirun_tests
-        ]},
+  {modules, []},
   {registered, [piqi_tools, piqi_sup]},
   {applications, [kernel, stdlib]},
   {mod, {piqi_app, []}},
